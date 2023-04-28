@@ -1,0 +1,1 @@
+sh train_small_server.sh 500000 1 7000 0 0 0
