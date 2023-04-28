@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-04-28 11:36:27
+LastEditTime: 2023-04-28 16:54:19
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/relational_memory.py
 '''
@@ -34,8 +34,8 @@ class GroupLinearLayer(nn.Module):
         # else:
         #     self.bias = None
         self.linear = nn.Linear(in_dim, out_dim)
-        self.linear.weight.data.uniform_(-a ,a)
-        self.linear.bias.data.uniform_(-a ,a)
+        self.linear.weight.data.uniform_(-a, a)
+        self.linear.bias.data.uniform_(-a, a)
 
     def forward(self, x):
         # x = x.permute(1, 0, 2)
@@ -104,7 +104,7 @@ class RelationalMemory(nn.Module):
             self,
             mem_slots,
             head_size,
-            attn_drop: float,
+            attn_drop: float = 0.9,
             num_heads: int = 1,
             num_blocks: int = 1,
             forget_bias=1.,
@@ -224,7 +224,8 @@ class RelationalMemory(nn.Module):
 
         output = att @ v
         # output = output.transpose(1, 2).contiguous().view(B, T, C)
-        output = output.transpose(1, 2).contiguous().view(output.size(0), T, -1)
+        output = output.transpose(
+            1, 2).contiguous().view(output.size(0), T, -1)
         return output
 
     def attend_over_memory(self, inputs, memory):
@@ -290,7 +291,8 @@ class RelationalMemory(nn.Module):
         if len(inputs.shape) == 3:
             gate_inputs = self.input_gate_projector(inputs)
             gate_inputs = gate_inputs.unsqueeze(1)
-            gate_memory = self.memory_gate_projector(memory) #(1092, 64, 2560)
+            gate_memory = self.memory_gate_projector(
+                memory)  # (1092, 64, 2560)
         else:
             raise ValueError(
                 f"input shape of create_gate function is {inputs.shape}, expects 3")
@@ -311,6 +313,21 @@ class RelationalMemory(nn.Module):
         forget_gate = torch.sigmoid(forget_gate + self.forget_bias)
 
         return input_gate, forget_gate
+
+    @classmethod
+    def from_linear(cls, layer, n_head):
+        n_embd, fan_in = layer.weight.shape
+        return cls(
+            mem_slots=1092,  # FIXME: 1092,
+            head_size=n_embd,
+            num_heads=n_head,
+            num_blocks=64,
+            forget_bias=1,
+            input_bias=0,
+            gate_style="unit",
+            attention_mlp_layers=1,
+            return_all_outputs=False,
+        )
 
 
 def count_parameters(model, name):
