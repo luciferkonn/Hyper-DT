@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-04-28 17:12:42
+LastEditTime: 2023-05-01 16:02:38
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/lora_utils.py
 '''
@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.utils.parametrize as parametrize
 from functools import partial
-from relational_memory import RelationalMemory
+from src.relational_memory import RelationalMemory
 
 default_lora_config = {
     nn.Linear: {
@@ -26,7 +26,7 @@ def apply_lora(
 ):
     if register:
         if type(layer) in lora_config:
-            for attr_name, parameterization in lora_config[type(layer).items()]:
+            for attr_name, parameterization in lora_config[type(layer)].items():
                 parametrize.register_parametrization(
                     layer, attr_name, parameterization(layer))
     else:

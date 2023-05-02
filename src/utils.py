@@ -1,9 +1,9 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-01-13 09:59:46
+LastEditTime: 2023-05-02 16:14:39
 LastEditors: Jikun Kang
-FilePath: /MDT/src/utils.py
+FilePath: /Hyper-DT/src/utils.py
 '''
 
 from typing import Mapping, Optional, Tuple
@@ -50,6 +50,8 @@ def cross_entropy(logits, labels):
 def accuracy(logits, labels):
     predicted_label = torch.argmax(logits, -1)
     acc = torch.eq(predicted_label, labels.squeeze(-1)).to(dtype=torch.float32)
+    # print(f"predicted {predicted_label.cpu().tolist()}")
+    # print(f"target {labels.squeeze(-1).cpu().tolist()}")
     return torch.mean(acc)
 
 

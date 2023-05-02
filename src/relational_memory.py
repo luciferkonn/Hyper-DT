@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-04-28 16:54:19
+LastEditTime: 2023-05-01 16:55:34
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/relational_memory.py
 '''
@@ -139,6 +139,7 @@ class RelationalMemory(nn.Module):
 
         # self.query_proj = nn.Linear(
         #     self.mem_size, self.key_size*self.n_heads)
+
         # FIXME: Hardcoded
         self.query_proj = nn.Linear(self.head_size, self.head_size)
         count_parameters(self.query_proj, "query")
