@@ -1,12 +1,13 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-04-10 17:18:47
+LastEditTime: 2023-05-02 16:03:02
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/train.py
 '''
 
 import random
+from src.lora_utils import add_lora
 import namegenerator
 import argparse
 import tqdm
@@ -183,6 +184,9 @@ def run(args):
         weight_decay=args.weight_decay,
     )
 
+    if args.apply_lora:
+        print("========>Adding LoRA")
+        add_lora(dt_model.transformer.blocks)
     trainer = Trainer(model=dt_model,
                       train_dataset_list=train_dataset_list,
                       train_game_list=train_game_list,
@@ -205,7 +209,15 @@ def run(args):
         epoch = epoch+1
     else:
         epoch = 0
-    trainer.train(epoch)
+    
+    if args.train:
+        print("========>Start Training")
+        trainer.train(epoch)
+    elif args.eval:
+        print("========>Start Evaluation")
+        trainer.evaluate()
+    else:
+        NotImplementedError("No actions for training or evaluation")
 
     # close logger
     if args.use_wandb:
@@ -239,6 +251,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--training_samples', type=int, default=1000)
     parser.add_argument('--load_path', type=str, default=None)
+    parser.add_argument('--apply_lora', type=str2bool, default=False)
+    parser.add_argument("--train", type=str2bool, default=False)
 
     # Evaluation configs
     parser.add_argument('--eval_steps', type=int, default=5000)

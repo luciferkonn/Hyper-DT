@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 2022-05-12 13:11:43
-LastEditTime: 2023-04-26 17:24:47
+LastEditTime: 2023-05-02 14:39:59
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/trainer.py
 '''
@@ -80,13 +80,16 @@ class Trainer:
                     'loss': logs['train_loss']
                 }, tf_file_loc)
             # evaluate model
-            if self.args.eval:
-                if epoch % self.eval_freq == 0:
-                    print("========Start Evaluation")
-                    rew_sum = self.evaluation_rollout(
-                        eval_envs_list=self.eval_envs, num_steps=self.args.eval_steps,
-                        eval_log_interval=self.eval_log_interval, device=self.device)
+            # if self.args.eval:
+            if epoch % self.eval_freq == 0:
+                rew_sum = self.evaluation_rollout(
+                    eval_envs_list=self.eval_envs, num_steps=self.args.eval_steps,
+                    eval_log_interval=self.eval_log_interval, device=self.device)
 
+    def evaluate(self):
+        rew_sum = self.evaluation_rollout(
+            eval_envs_list=self.eval_envs, num_steps=self.args.eval_steps,
+            eval_log_interval=self.eval_log_interval, device=self.device)
 
     def load_model(self, model_path):
         ckpt = torch.load(model_path)
@@ -195,6 +198,8 @@ class Trainer:
                 # Collect step results and stack as a batch.
                 step_results = [env.step(act.detach().cpu().numpy())
                                 for env, act in zip(envs, actions)]
+                # print("=======>Actions")
+                # print(actions)
                 obs_list = [result[0] for result in step_results]
                 obs = tree_map(
                     lambda *arr: torch.from_numpy(np.stack(arr, axis=0)).to(device=device), *obs_list)
@@ -216,7 +221,7 @@ class Trainer:
                   (game_name, t, done, rew_sum))
             if self.use_wandb:
                 wandb.log({f"eval/step/{game_name}": t,
-                            f"eval/rew_mean/{game_name}": np.mean(rew_sum)})
+                           f"eval/rew_mean/{game_name}": np.mean(rew_sum)})
         return np.mean(rew_sum)
 
 

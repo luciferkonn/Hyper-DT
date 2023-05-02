@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-04-27 15:25:53
+LastEditTime: 2023-05-02 16:13:49
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/model.py
 '''
@@ -87,16 +87,6 @@ class CausalSelfAttention(nn.Module):
 
         # used for memory
         if self.gw:
-            memory_size = int(self.shared_memory_percentage * key.size(0))
-            memory = torch.randn(memory_size, 1, key.size(2)).repeat(
-                1, key.size(1), 1).to(key.device)
-            if self.memory is not None:
-                self.relational_memory.initial_state(
-                    batch_size=query.size(0)
-                ).to(query.device)
-
-            # key = key.transpose(1, 0)
-
             memory, out_with_mem = self.relational_memory(
                 ipts=key,
                 memory=memory
@@ -198,10 +188,18 @@ class GPT2(nn.Module):
         attn_drop,
         resid_drop,
         use_gw=False,
+        use_topk=False,
+        topk=3,
+        num_steps=5,
+        null_attention=False,
+        shared_memory_percentage: float = 1.0,
+        memory=None,
     ):
         super().__init__()
 
         self.use_gw = use_gw
+        self.memory = memory
+        self.shared_memory_percentage = shared_memory_percentage
 
         # self.blocks = nn.Sequential(*[DenseBlock(n_embd=n_embd, n_head=n_head, seq_len=seq_len,
         #                             attn_drop=attn_drop, resid_drop=resid_drop, gw=gw) for _ in range(n_layers)])
@@ -209,6 +207,24 @@ class GPT2(nn.Module):
         for _ in range(n_layers):
             self.blocks.append(DenseBlock(n_embd=n_embd, n_head=n_head, seq_len=seq_len,
                                           attn_drop=attn_drop, resid_drop=resid_drop, use_gw=use_gw))
+        if self.use_gw:
+            if self.memory is None:
+                self.relational_memory = RelationalMemory(
+                    mem_slots=1092,  # FIXME: 1092,
+                    head_size=n_embd,
+                    attn_drop=attn_drop,
+                    num_heads=n_head,
+                    num_blocks=64,
+                    forget_bias=1,
+                    input_bias=0,
+                    gate_style="unit",
+                    attention_mlp_layers=1,
+                    return_all_outputs=False,
+                    use_topk=use_topk,
+                    topk=topk,
+                    num_steps=num_steps,
+                    null_attention=null_attention
+                )
 
     def forward(
         self,
@@ -218,6 +234,15 @@ class GPT2(nn.Module):
         is_training: bool = False,
         memory=None,
     ):
+        if self.use_gw:
+            # x size (64, 312, 512)
+            memory_size = int(self.shared_memory_percentage * x.size(0))
+            memory = torch.randn(memory_size, 1, x.size(2)).repeat(
+                1, x.size(1), 1).to(x.device)
+            if self.memory is not None:
+                self.relational_memory.initial_state(
+                    batch_size=x.size(0)
+                ).to(x.device)
         """
         Args:
             x: Inputs, (B, T, C)
@@ -463,7 +488,9 @@ class DecisionTransformer(nn.Module):
         if self.single_return_token:
             ret_target = ret_target[:, :1]
             ret_logits = ret_logits[:, :1, :]
-        obj_pairs = [(act_logits, act_target), (ret_logits, ret_target)]
+        # FIXME: change obj_pairs
+        obj_pairs = [(act_logits, act_target)]
+        # obj_pairs = [(act_logits, act_target), (ret_logits, ret_target)]
         if self.predict_reward:
             rew_target = encode_reward(inputs['rewards'])
             rew_logits = model_outputs['reward_logits']
