@@ -488,9 +488,7 @@ class DecisionTransformer(nn.Module):
         if self.single_return_token:
             ret_target = ret_target[:, :1]
             ret_logits = ret_logits[:, :1, :]
-        # FIXME: change obj_pairs
-        obj_pairs = [(act_logits, act_target)]
-        # obj_pairs = [(act_logits, act_target), (ret_logits, ret_target)]
+        obj_pairs = [(act_logits, act_target), (ret_logits, ret_target)]
         if self.predict_reward:
             rew_target = encode_reward(inputs['rewards'])
             rew_logits = model_outputs['reward_logits']

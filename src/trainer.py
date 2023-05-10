@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 2022-05-12 13:11:43
-LastEditTime: 2023-05-02 14:39:59
+LastEditTime: 2023-05-08 21:00:12
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/trainer.py
 '''
@@ -14,6 +14,7 @@ import wandb
 from tqdm import tqdm
 from jax.tree_util import tree_map
 from torch.utils.data.dataloader import DataLoader
+from src.minlora.utils import get_lora_state_dict
 from src.env_utils import ATARI_RETURN_RANGE
 from src.utils import accuracy, autoregressive_generate, cross_entropy, decode_return, encode_return, encode_reward, sample_from_logits
 
@@ -45,10 +46,8 @@ class Trainer:
         self.eval_envs = eval_env_list
         self.eval_game_name = eval_game_name
         self.args = args
-        self.optimizer = optimizer
+        self.optimizer = None
         self.device = args.device
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(
-            optimizer, lambda steps: min((steps+1)/args.warmup_steps, 1))
         self.num_steps_per_iter = num_steps_per_iter
         self.log_interval = log_interval
         self.eval_log_interval = eval_log_interval
@@ -63,22 +62,39 @@ class Trainer:
         self.single_return_token = single_return_token
         self.training_samples = training_samples
         self.eval_freq = eval_freq
+        self.warmup_steps = args.warmup_steps
 
-    def train(self, current_epoch):
-        tf_file_loc = os.path.join(
-            self.run_dir, f'tf_model.pt')
+    def train(self, current_epoch, optimizer, apply_lora=False):
+        self.optimizer = optimizer
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer, lambda steps: min((steps+1)/self.warmup_steps, 1))
+        if apply_lora:
+            tf_file_loc = os.path.join(self.run_dir, f'lora_model.pt')
+        else:
+            tf_file_loc = os.path.join(
+                self.run_dir, f'tf_model.pt')
         for epoch in range(current_epoch, self.args.max_epochs):
             # train model
             logs = self.run_epoch(iter_num=epoch)
             if epoch % self.save_freq == 0 or epoch == (self.max_epochs - 1):
                 print("========================")
                 print(f"The model is saved to {tf_file_loc}")
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': self.model.state_dict(),
-                    'optimizer_state_dict': self.optimizer.state_dict(),
-                    'loss': logs['train_loss']
-                }, tf_file_loc)
+                if apply_lora:
+                    lora_state_dict = get_lora_state_dict(self.model)
+                    torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': lora_state_dict,
+                        'optimizer_state_dict': self.optimizer.state_dict(),
+                        'loss': logs['train_loss']
+                    }, tf_file_loc)
+                else:
+
+                    torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': self.model.state_dict(),
+                        'optimizer_state_dict': self.optimizer.state_dict(),
+                        'loss': logs['train_loss']
+                    }, tf_file_loc)
             # evaluate model
             # if self.args.eval:
             if epoch % self.eval_freq == 0:
@@ -91,10 +107,11 @@ class Trainer:
             eval_envs_list=self.eval_envs, num_steps=self.args.eval_steps,
             eval_log_interval=self.eval_log_interval, device=self.device)
 
-    def load_model(self, model_path):
+    def load_model(self, model_path, apply_lora=False):
         ckpt = torch.load(model_path)
+        # if not apply_lora:
+            # self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
         self.model.load_state_dict(ckpt['model_state_dict'])
-        self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
         epoch = ckpt['epoch']
         loss = ckpt['loss']
         return epoch, loss
@@ -219,6 +236,8 @@ class Trainer:
                     break
             print('game: %s step: %d done: %s reward: %s' %
                   (game_name, t, done, rew_sum))
+            top3 = rew_sum[np.argsort(rew_sum)][-3:]
+            print(f"mean {np.mean(rew_sum)}, top3 {np.mean(top3)}")
             if self.use_wandb:
                 wandb.log({f"eval/step/{game_name}": t,
                            f"eval/rew_mean/{game_name}": np.mean(rew_sum)})

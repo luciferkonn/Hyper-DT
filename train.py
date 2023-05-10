@@ -1,13 +1,13 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-02 16:03:02
+LastEditTime: 2023-05-08 22:52:54
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/train.py
 '''
 
 import random
-from src.lora_utils import add_lora
+from src.minlora import add_lora, get_lora_params
 import namegenerator
 import argparse
 import tqdm
@@ -178,22 +178,14 @@ def run(args):
                      for i in range(args.num_eval_envs)]
         eval_game_list.append(env_batch)
 
-    optimizer = torch.optim.AdamW(
-        dt_model.parameters(),
-        lr=args.optimizer_lr,
-        weight_decay=args.weight_decay,
-    )
 
-    if args.apply_lora:
-        print("========>Adding LoRA")
-        add_lora(dt_model.transformer.blocks)
     trainer = Trainer(model=dt_model,
                       train_dataset_list=train_dataset_list,
                       train_game_list=train_game_list,
                       eval_env_list=eval_game_list,
                       eval_game_name=args.eval_game_list,
                       args=args,
-                      optimizer=optimizer,
+                      optimizer=None,
                       run_dir=run_dir,
                       grad_norm_clip=args.grad_norm_clip,
                       log_interval=args.log_interval,
@@ -204,15 +196,29 @@ def run(args):
     total_params = sum(params.numel() for params in dt_model.parameters())
     print(f"======> Total number of params are {total_params}")
     if args.load_path != '0':
-        epoch, loss = trainer.load_model(args.load_path)
+        epoch, loss = trainer.load_model(args.load_path, args.apply_lora)
         print(f"========> Load CKPT from {args.load_path}")
         epoch = epoch+1
     else:
         epoch = 0
     
+    if args.apply_lora:
+        print("========>Adding LoRA")
+        add_lora(dt_model.module.transformer)
+        parameters = [
+            {"params": list(get_lora_params(dt_model.module.transformer))}
+        ]
+        optimizer = torch.optim.AdamW(parameters, lr=args.optimizer_lr)
+    else:
+        optimizer = torch.optim.AdamW(
+            dt_model.parameters(),
+            lr=args.optimizer_lr,
+            weight_decay=args.weight_decay,
+        )
+
     if args.train:
         print("========>Start Training")
-        trainer.train(epoch)
+        trainer.train(epoch, optimizer, apply_lora=args.apply_lora)
     elif args.eval:
         print("========>Start Evaluation")
         trainer.evaluate()
