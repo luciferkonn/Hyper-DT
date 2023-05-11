@@ -178,7 +178,24 @@ def run(args):
             train_game_list.append(f"{name}_{str(i+1)}")
 
     # init eval ganme list
-    eval_game_list = []
+    eval_game_list = ['bin-picking-v2', 'box-close-v2', 'hand-insert-v2', 'door-lock-v2', 'door-unlock-v2']
+    ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
+
+    testing_envs = []
+    test_game_list = []
+    for name, env_cls in ml45.test_classes.items():
+        test_game_list.append(name)
+    print(test_game_list)
+    #     env = env_cls()
+    #     task = random.choice([task for task in ml45.test_tasks
+    #                             if task.env_name == name])
+    #     env.set_task(task)
+    #     testing_envs.append(env)
+
+    # for env in testing_envs:
+    #     obs = env.reset()  # Reset environment
+    #     a = env.action_space.sample()  # Sample an action
+    #     obs, reward, done, info = env.step(a)  # Step the environoment with the sampled random action
     # for game_name in args.eval_game_list:
     #     env_fn = build_env_fn(game_name)
     #     env_batch = [env_fn()
