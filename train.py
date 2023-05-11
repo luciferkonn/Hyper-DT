@@ -28,6 +28,7 @@ from src.env_utils import ATARI_NUM_ACTIONS, ATARI_NUM_REWARDS, ATARI_RETURN_RAN
 from src.model import DecisionTransformer
 from torch.utils.data import Dataset
 from src.trainer import Trainer
+import metaworld
 
 meta_world_game_list = ['assembly-v2', 'basketball-v2', 'button-press-topdown-v2', 
 'button-press-topdown-wall-v2', 'button-press-v2', 'button-press-wall-v2', 'coffee-button-v2', 'coffee-pull-v2', 'coffee-push-v2', 'dial-turn-v2', 'disassemble-v2', 'door-close-v2', 'door-open-v2', 'drawer-close-v2', 'drawer-open-v2', 'faucet-open-v2', 'faucet-close-v2', 'hammer-v2', 'handle-press-side-v2', 'handle-press-v2', 'handle-pull-side-v2', 'handle-pull-v2', 'lever-pull-v2', 'peg-insert-side-v2', 'pick-place-wall-v2', 'pick-out-of-hole-v2', 'reach-v2', 'push-back-v2', 'push-v2', 'pick-place-v2', 'plate-slide-v2', 'plate-slide-side-v2', 'plate-slide-back-v2', 'plate-slide-back-side-v2', 'peg-unplug-side-v2', 'soccer-v2', 'stick-push-v2', 'stick-pull-v2', 'push-wall-v2', 'reach-wall-v2', 'shelf-place-v2', 'sweep-into-v2', 'sweep-v2', 'window-open-v2', 'window-close-v2']
@@ -162,6 +163,8 @@ def run(args):
     train_dataset_list = []
     train_game_list = []
     # TODO: fix this
+    if args.eval:
+        meta_world_game_list = []
     for i in range(args.num_datasets):
         for name in meta_world_game_list:
             print(f"======>Loading Game {name}_{i+1}")
@@ -177,8 +180,24 @@ def run(args):
             train_dataset_list.append(train_dataset)
             train_game_list.append(f"{name}_{str(i+1)}")
 
-    # init eval ganme list
+    # init eval game list
+    ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
+
     eval_game_list = []
+    test_game_list = []
+    for name, env_cls in ml45.test_classes.items():
+        test_game_list.append(name)
+        env_batch = [env_cls() for i in range(args.num_eval_envs)]
+        task = random.choice([task for task in ml45.test_tasks
+                                if task.env_name == name])
+        for env in env_batch:
+            env.set_task(task)
+        eval_game_list.append(env_batch)
+
+    # for env in eval_game_list:
+    #     obs = env.reset()  # Reset environment
+    #     a = env.action_space.sample()  # Sample an action
+    #     obs, reward, done, info = env.step(a)  # Step the environoment with the sampled random action
     # for game_name in args.eval_game_list:
     #     env_fn = build_env_fn(game_name)
     #     env_batch = [env_fn()
@@ -203,7 +222,8 @@ def run(args):
     total_params = sum(params.numel() for params in dt_model.parameters())
     print(f"======> Total number of params are {total_params}")
     if args.load_path != '0':
-        epoch, loss = trainer.load_model(args.load_path, args.apply_lora)
+        best_model = wandb.restore('tf_model.pt','jaxonkang/meta-world/z0wfhfhl')
+        epoch, loss = trainer.load_model(best_model, args.apply_lora)
         print(f"========> Load CKPT from {args.load_path}")
         epoch = epoch+1
     else:
