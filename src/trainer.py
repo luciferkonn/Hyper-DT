@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 2022-05-12 13:11:43
-LastEditTime: 2023-05-08 21:00:12
+LastEditTime: 2023-05-10 20:41:19
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/trainer.py
 '''
@@ -97,10 +97,11 @@ class Trainer:
                     }, tf_file_loc)
             # evaluate model
             # if self.args.eval:
-            if epoch % self.eval_freq == 0:
-                rew_sum = self.evaluation_rollout(
-                    eval_envs_list=self.eval_envs, num_steps=self.args.eval_steps,
-                    eval_log_interval=self.eval_log_interval, device=self.device)
+            if False:
+                if epoch % self.eval_freq == 0:
+                    rew_sum = self.evaluation_rollout(
+                        eval_envs_list=self.eval_envs, num_steps=self.args.eval_steps,
+                        eval_log_interval=self.eval_log_interval, device=self.device)
 
     def evaluate(self):
         rew_sum = self.evaluation_rollout(
@@ -159,16 +160,16 @@ class Trainer:
                 if self.log_interval and t % self.log_interval == 0:
                     if self.n_gpus:
                         train_loss = train_loss.mean().detach().cpu().item()
-                        acc = result_dict['accuracy'].mean(
-                        ).detach().cpu().item()*100
+                        # acc = result_dict['accuracy'].mean(
+                        # ).detach().cpu().item()*100
                     else:
                         train_loss = train_loss.detach().cpu().item()
                         acc = result_dict['accuracy'].detach().cpu().item()*100
                     pbar.set_description(
-                        f"game {game_name} epoch {iter_num} steps: {t}: train loss {train_loss:.5f} accuracy {acc:.3f}%.")
+                        f"game {game_name} epoch {iter_num} steps: {t}: train loss {train_loss:.5f}.")
                     if self.use_wandb:
                         wandb.log({f"train/episode_loss/{game_name}": train_loss,
-                                   f"train/accuracy/{game_name}": acc,
+                                #    f"train/accuracy/{game_name}": acc,
                                    f'train/epoch/{game_name}': (iter_num)*self.num_steps_per_iter+t})
                 if n_samples >= self.training_samples:
                     break

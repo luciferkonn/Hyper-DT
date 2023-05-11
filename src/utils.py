@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-02 16:14:39
+LastEditTime: 2023-05-10 20:33:18
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/utils.py
 '''
@@ -40,16 +40,17 @@ def cross_entropy(logits, labels):
     #                    logits.shape[-1]).squeeze(2)
     # loss = -labels * F.log_softmax(logits)
     # return torch.mean(loss)
-    N, T = labels.size(0), labels.size(1)
-    labels = labels.reshape(N*T,).to(dtype=torch.int64)
-    logits = logits.reshape(N*T, -1)
-    loss = F.cross_entropy(logits, labels)
+    # N, T = labels.size(0), labels.size(1)
+    # labels = labels.reshape(-1,).to(dtype=torch.int64)
+    # logits = logits.reshape(labels.size(0), -1)
+    # loss = F.cross_entropy(logits, labels)
+    loss = F.mse_loss(logits.to(dtype=torch.float32), labels.view_as(logits).to(dtype=torch.float32))
     return loss
 
 
 def accuracy(logits, labels):
     predicted_label = torch.argmax(logits, -1)
-    acc = torch.eq(predicted_label, labels.squeeze(-1)).to(dtype=torch.float32)
+    acc = torch.eq(predicted_label, labels.squeeze(2)).to(dtype=torch.float32)
     # print(f"predicted {predicted_label.cpu().tolist()}")
     # print(f"target {labels.squeeze(-1).cpu().tolist()}")
     return torch.mean(acc)

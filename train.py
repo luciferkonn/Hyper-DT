@@ -1,12 +1,13 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-08 22:52:54
+LastEditTime: 2023-05-10 23:01:46
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/train.py
 '''
 
 import random
+from src.create_self_dataset import create_self_dataset
 from src.minlora import add_lora, get_lora_params
 import namegenerator
 import argparse
@@ -28,6 +29,8 @@ from src.model import DecisionTransformer
 from torch.utils.data import Dataset
 from src.trainer import Trainer
 
+meta_world_game_list = ['assembly-v2', 'basketball-v2', 'button-press-topdown-v2', 
+'button-press-topdown-wall-v2', 'button-press-v2', 'button-press-wall-v2', 'coffee-button-v2', 'coffee-pull-v2', 'coffee-push-v2', 'dial-turn-v2', 'disassemble-v2', 'door-close-v2', 'door-open-v2', 'drawer-close-v2', 'drawer-open-v2', 'faucet-open-v2', 'faucet-close-v2', 'hammer-v2', 'handle-press-side-v2', 'handle-press-v2', 'handle-pull-side-v2', 'handle-pull-v2', 'lever-pull-v2', 'peg-insert-side-v2', 'pick-place-wall-v2', 'pick-out-of-hole-v2', 'reach-v2', 'push-back-v2', 'push-v2', 'pick-place-v2', 'plate-slide-v2', 'plate-slide-side-v2', 'plate-slide-back-v2', 'plate-slide-back-side-v2', 'peg-unplug-side-v2', 'soccer-v2', 'stick-push-v2', 'stick-pull-v2', 'push-wall-v2', 'reach-wall-v2', 'shelf-place-v2', 'sweep-into-v2', 'sweep-v2', 'window-open-v2', 'window-close-v2']
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -53,7 +56,7 @@ class StateActionReturnDataset(Dataset):
         rewards
     ):
         self.block_size = block_size
-        self.vocab_size = max(actions) + 1
+        # self.vocab_size = max(actions) + 1
         self.obs = obs
         self.actions = actions
         self.done_idxs = done_idxs
@@ -134,9 +137,9 @@ def run(args):
 
     # init model
     dt_model = DecisionTransformer(
-        num_actions=ATARI_NUM_ACTIONS,
+        num_actions=1000,
         num_rewards=ATARI_NUM_REWARDS,
-        return_range=ATARI_RETURN_RANGE,
+        return_range=[-1,1],
         n_layer=args.n_layer,
         n_embd=args.n_embd,
         n_head=args.n_head,
@@ -160,11 +163,15 @@ def run(args):
     train_game_list = []
     # TODO: fix this
     for i in range(args.num_datasets):
-        for name in args.train_game_list:
+        for name in meta_world_game_list:
             print(f"======>Loading Game {name}_{i+1}")
-            obss, actions, done_idxs, rtgs, timesteps, rewards = create_dataset(
-                args.num_buffers, args.data_steps, args.folder_prefix, name,
-                str(i+1), args.trajectories_per_buffer)
+            if True:
+                obss, actions, done_idxs, rtgs, timesteps, rewards = create_self_dataset(
+                    args.num_buffers, args.data_steps, name, args.trajectories_per_buffer)
+            else:
+                obss, actions, done_idxs, rtgs, timesteps, rewards = create_dataset(
+                    args.num_buffers, args.data_steps, args.folder_prefix, name,
+                    str(i+1), args.trajectories_per_buffer)
             train_dataset = StateActionReturnDataset(
                 obss, args.seq_len*3, actions, done_idxs, rtgs, timesteps, rewards)
             train_dataset_list.append(train_dataset)
@@ -172,11 +179,11 @@ def run(args):
 
     # init eval ganme list
     eval_game_list = []
-    for game_name in args.eval_game_list:
-        env_fn = build_env_fn(game_name)
-        env_batch = [env_fn()
-                     for i in range(args.num_eval_envs)]
-        eval_game_list.append(env_batch)
+    # for game_name in args.eval_game_list:
+    #     env_fn = build_env_fn(game_name)
+    #     env_batch = [env_fn()
+    #                  for i in range(args.num_eval_envs)]
+    #     eval_game_list.append(env_batch)
 
 
     trainer = Trainer(model=dt_model,

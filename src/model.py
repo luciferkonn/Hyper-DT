@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-02 16:13:49
+LastEditTime: 2023-05-10 20:38:34
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/model.py
 '''
@@ -296,16 +296,19 @@ class DecisionTransformer(nn.Module):
                                 resid_drop=resid_drop, use_gw=use_gw)
 
         patch_height, patch_width = patch_size[0], patch_size[1]
-        self.conv_net = nn.Conv2d(
-            4, n_embd, (patch_height, patch_width), (patch_height, patch_width), 'valid')
+        # self.conv_net = nn.Conv2d(
+        #     4, n_embd, (patch_height, patch_width), (patch_height, patch_width), 'valid')
+        self.obs_encoder = nn.Linear(39,n_embd)
 
         self.ret_encoder = nn.Embedding(self.num_returns+1, n_embd)
-        self.act_encoder = nn.Embedding(num_actions, n_embd)
+        self.act_encoder = nn.Linear(4, n_embd)
         self.rew_encoder = nn.Embedding(num_rewards, n_embd)
-        self.ret_mlp = nn.Linear(n_embd, self.num_returns+1)
+        # self.ret_mlp = nn.Linear(n_embd, self.num_returns+1)
+        self.ret_mlp = nn.Linear(n_embd, 1)
         self.device = device
         if self.predict_reward:
-            self.rew_mlp = nn.Linear(n_embd, num_rewards)
+            self.rew_mlp = nn.Linear(n_embd, 1)
+            # self.rew_mlp = nn.Linear(n_embd, num_rewards)
         if create_hnet:
             self.mnet = MLP(n_in=n_embd, n_out=num_actions,
                             hidden_layers=mnets_arch, no_weights=True).to(device=device)
@@ -319,7 +322,7 @@ class DecisionTransformer(nn.Module):
             ).to(device=device)
             self.hnet.apply_hyperfan_init(mnet=self.mnet)
         else:
-            self.act_mlp = nn.Linear(n_embd, num_actions)
+            self.act_mlp = nn.Linear(n_embd, 4)
 
     def embed_inputs(
         self,
@@ -333,7 +336,7 @@ class DecisionTransformer(nn.Module):
             obs: (B, T, W, H, C)
         """
         # Embed only prefix_frames first observations.
-        assert len(obs.shape) == 5
+        assert len(obs.shape) == 3
 
         image_dims = obs.shape[-3:]
         batch_dims = obs.shape[:2]
@@ -341,10 +344,10 @@ class DecisionTransformer(nn.Module):
         # obs are [B*T, W, H, C]
         obs = obs.reshape(-1, *image_dims)
         obs = obs.to(dtype=torch.float32) / 255.0
-        obs_emb = self.conv_net(obs)
+        obs_emb = self.obs_encoder(obs)
 
         # Reshape to (B, T, P*P, D)
-        obs_emb = obs_emb.reshape(*batch_dims, -1, obs_emb.shape[1])
+        obs_emb = obs_emb.reshape(*batch_dims, -1, obs_emb.shape[-1])
         pos_emb = nn.Parameter(torch.normal(mean=torch.zeros(
             1, 1, obs_emb.shape[2], obs_emb.shape[3]), std=0.02)).to(device=self.device)
         obs_emb += pos_emb
@@ -352,7 +355,7 @@ class DecisionTransformer(nn.Module):
         ret = encode_return(ret, self.return_range)
         rew = encode_reward(rew)
         ret_emb = self.ret_encoder(ret)
-        act_emb = self.act_encoder(act)
+        act_emb = self.act_encoder(act.to(dtype=torch.float32))
         if self.predict_reward:
             rew_emb = self.rew_encoder(rew)
         else:
@@ -386,6 +389,8 @@ class DecisionTransformer(nn.Module):
                 ret_emb = ret_emb.unsqueeze(1)
                 act_emb = act_emb.unsqueeze(1)
                 rew_emb = rew_emb.unsqueeze(1)
+            ret_emb = ret_emb.squeeze(2)
+            rew_emb = rew_emb.squeeze(2)
             token_emb = torch.cat((obs_emb, ret_emb, act_emb, rew_emb), dim=2)
             tokens_per_step = num_obs_tokens + ret_emb.shape[2]*3
         else:
@@ -462,7 +467,7 @@ class DecisionTransformer(nn.Module):
         # Return logits as well as pre-logits embedding.
         result_dict = {
             'embeds': embeds,
-            'action_logits': act_pred,
+            'action_logits': act_pred.reshape(act_pred.size(0), act_pred.size(1), 4, -1),
             'return_logits': ret_pred,
         }
         if self.predict_reward:
@@ -472,7 +477,7 @@ class DecisionTransformer(nn.Module):
 
         # Return evaluation metrics
         result_dict['loss'] = self.sequence_loss(inputs, result_dict)
-        result_dict['accuracy'] = self.sequence_accuracy(inputs, result_dict)
+        # result_dict['accuracy'] = self.sequence_accuracy(inputs, result_dict)
         return result_dict
 
     def _objective_pairs(
