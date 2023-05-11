@@ -34,5 +34,5 @@ python train.py --create_hnet=$create_hnet --max_epochs=1000 --eval_freq 10 --n_
   --load_path=$model_path --num_datasets 1 --use_gw=$gw --folder_prefix='/home/jikun/Git/Hyper-DT/dataset' --batch_size=8 --eval=$eval --train=$train --apply_lora=$lora\
   --train_game_list 'reach-v2'\
   --eval_game_list 'Amidar'\
-  --seed 123\
+  --seed=123 --experiment_name='meta-world'\
   # --cuda_cores='4,5,6,7'\

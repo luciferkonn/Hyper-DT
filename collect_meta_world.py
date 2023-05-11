@@ -250,5 +250,26 @@ def run():
                             dataset.create_dataset(k, data=data[k], compression='gzip')
                         print(f"====>Generated data {i}")
 
+def test():
+
+    ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
+
+    testing_envs = []
+    test_game_list = []
+    for name, env_cls in ml45.test_classes.items():
+        test_game_list.append(name)
+    print(test_game_list)
+    #     env = env_cls()
+    #     task = random.choice([task for task in ml45.test_tasks
+    #                             if task.env_name == name])
+    #     env.set_task(task)
+    #     testing_envs.append(env)
+
+    # for env in testing_envs:
+    #     obs = env.reset()  # Reset environment
+    #     a = env.action_space.sample()  # Sample an action
+    #     obs, reward, done, info = env.step(a)  # Step the environoment with the sampled random action
+
 if __name__ == "__main__":
-    run()
+    # run()
+    test()

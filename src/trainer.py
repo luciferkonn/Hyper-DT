@@ -95,6 +95,7 @@ class Trainer:
                         'optimizer_state_dict': self.optimizer.state_dict(),
                         'loss': logs['train_loss']
                     }, tf_file_loc)
+                wandb.save(tf_file_loc)
             # evaluate model
             # if self.args.eval:
             if False:
