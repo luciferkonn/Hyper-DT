@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-12 21:10:46
+LastEditTime: 2023-05-13 10:26:44
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/train.py
 '''
@@ -236,6 +236,8 @@ def run(args):
             {"params": list(get_lora_params(dt_model.module.transformer))}
         ]
         optimizer = torch.optim.AdamW(parameters, lr=args.optimizer_lr)
+        total_params = sum(params.numel() for params in dt_model.parameters())
+        print(f"======> Total number of params after LoRA {total_params}")
     else:
         optimizer = torch.optim.AdamW(
             dt_model.parameters(),
