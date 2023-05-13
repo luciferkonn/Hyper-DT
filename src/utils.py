@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-10 20:33:18
+LastEditTime: 2023-05-13 15:01:30
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/utils.py
 '''
@@ -41,10 +41,14 @@ def cross_entropy(logits, labels):
     # loss = -labels * F.log_softmax(logits)
     # return torch.mean(loss)
     # N, T = labels.size(0), labels.size(1)
-    # labels = labels.reshape(-1,).to(dtype=torch.int64)
-    # logits = logits.reshape(labels.size(0), -1)
-    # loss = F.cross_entropy(logits, labels)
-    loss = F.mse_loss(logits.to(dtype=torch.float32), labels.view_as(logits).to(dtype=torch.float32))
+    labels = labels.reshape(-1,).to(dtype=torch.int64)
+    logits = logits.reshape(labels.size(0), -1)
+    loss = F.cross_entropy(logits, labels)
+    return loss
+
+def mse_loss(logits, labels):
+    # loss = F.mse_loss(logits.to(dtype=torch.float32), labels.view_as(logits).to(dtype=torch.float32))
+    loss = torch.mean((logits-labels)**2)
     return loss
 
 

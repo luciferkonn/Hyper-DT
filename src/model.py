@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-11 22:32:34
+LastEditTime: 2023-05-13 15:07:28
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/model.py
 '''
@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from hypnettorch.hnets import HMLP
 from hypnettorch.mnets import MLP
 from src.relational_memory import RelationalMemory
-from src.utils import accuracy, autoregressive_generate, cross_entropy, decode_return, encode_return, encode_reward, sample_from_logits
+from src.utils import accuracy, autoregressive_generate, cross_entropy, decode_return, encode_return, encode_reward, mse_loss, sample_from_logits
 
 
 class CausalSelfAttention(nn.Module):
@@ -322,7 +322,10 @@ class DecisionTransformer(nn.Module):
             ).to(device=device)
             self.hnet.apply_hyperfan_init(mnet=self.mnet)
         else:
-            self.act_mlp = nn.Linear(n_embd, 4)
+            # self.act_mlp = nn.Linear(n_embd, 4)
+            self.act_mlp = nn.Sequential(
+                *([nn.Linear(n_embd, 4)] + ([nn.Tanh()]))
+            )
 
     def embed_inputs(
         self,
@@ -487,17 +490,18 @@ class DecisionTransformer(nn.Module):
     ) -> torch.Tensor:
         """Get logit-target paris for the model objective terms"""
         act_target = inputs['actions']
-        ret_target = encode_return(inputs['returns-to-go'], self.return_range)
+        # ret_target = encode_return(inputs['returns-to-go'], self.return_range)
         act_logits = model_outputs['action_logits']
-        ret_logits = model_outputs['return_logits']
-        if self.single_return_token:
-            ret_target = ret_target[:, :1]
-            ret_logits = ret_logits[:, :1, :]
-        obj_pairs = [(act_logits, act_target), (ret_logits, ret_target)]
-        if self.predict_reward:
-            rew_target = encode_reward(inputs['rewards'])
-            rew_logits = model_outputs['reward_logits']
-            obj_pairs.append((rew_logits, rew_target))
+        # ret_logits = model_outputs['return_logits']
+        # if self.single_return_token:
+        #     ret_target = ret_target[:, :1]
+        #     ret_logits = ret_logits[:, :1, :]
+        # obj_pairs = [(act_logits, act_target), (ret_logits, ret_target)]
+        obj_pairs = [(act_logits, act_target)]
+        # if self.predict_reward:
+        #     rew_target = encode_reward(inputs['rewards'])
+        #     rew_logits = model_outputs['reward_logits']
+        #     obj_pairs.append((rew_logits, rew_target))
         return obj_pairs
 
     def sequence_loss(
@@ -507,7 +511,8 @@ class DecisionTransformer(nn.Module):
     ) -> torch.Tensor:
         """Compute the loss on data wrt model outputs"""
         obj_pairs = self._objective_pairs(inputs, model_outputs)
-        obj = [cross_entropy(logits, target) for logits, target in obj_pairs]
+        obj = [mse_loss(logits, target) for logits, target in obj_pairs]
+        # obj = [cross_entropy(logits, target) for logits, target in obj_pairs]
         return sum(obj) / len(obj)
 
     def sequence_accuracy(
