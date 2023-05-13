@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-10 20:38:34
+LastEditTime: 2023-05-11 22:32:34
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/model.py
 '''
@@ -336,7 +336,7 @@ class DecisionTransformer(nn.Module):
             obs: (B, T, W, H, C)
         """
         # Embed only prefix_frames first observations.
-        assert len(obs.shape) == 3
+        # assert len(obs.shape) == 3
 
         image_dims = obs.shape[-3:]
         batch_dims = obs.shape[:2]

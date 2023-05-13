@@ -211,11 +211,11 @@ def trajectory_generator(env, policy, act_noise_pct, render=False):
             env.render()
         o = next_o
         # if done or info['success']:
-        if done:
+        if done or info['success']:
             return data
 
-    append_data(data, o, a, r, next_o, True)
-    return data
+    # append_data(data, o, a, r, next_o, True)
+    return None 
 
 def run():
     ml45 = metaworld.ML45()
@@ -233,7 +233,7 @@ def run():
 
         for env, name in zip(training_envs, train_env_names):
             print(f"====>Current Game {name}")
-            data_dir = os.path.join("dataset", name)
+            data_dir = os.path.join("dataset_success", name)
             os.makedirs(data_dir, exist_ok=True)
 
             for row in test_cases_latest_nonoise:
@@ -271,5 +271,5 @@ def test():
     #     obs, reward, done, info = env.step(a)  # Step the environoment with the sampled random action
 
 if __name__ == "__main__":
-    # run()
-    test()
+    run()
+    # test()

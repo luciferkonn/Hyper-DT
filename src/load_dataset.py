@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-10 23:14:51
+LastEditTime: 2023-05-12 15:44:29
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/load_dataset.py
 '''
@@ -70,12 +70,15 @@ def prepare_dataset(
 ):
     # Load dataset
     dataset_dir = f'{folder_name}/{game_name}'
-    num_files = len([name for name in os.listdir(dataset_dir)
-                    if os.path.isfile(os.path.join(dataset_dir, name))])
+    file_name_list = [name for name in os.listdir(dataset_dir)
+                    if os.path.isfile(os.path.join(dataset_dir, name))]
+    num_files = len(file_name_list)
     all_traj = []
+    if num_files == 0:
+        return False
 
-    for i in range(0, num_files, steps):
-        name = f'{i}.hdf5'
+    for name in file_name_list:
+        # name = f'{i}.hdf5'
         print(f'Reading file {name}')
         file_name = os.path.join(dataset_dir, name)
         with h5py.File(file_name, 'r') as f:
@@ -89,7 +92,7 @@ def prepare_dataset(
                 'rewards': rewards,
                 'terminals': dones
             })
-    fname = f'data/{game_name}_{mode}.pkl'
+    fname = f'data_success/{game_name}_{mode}.pkl'
     with open(fname, 'wb') as f:
         pickle.dump(all_traj, f)
     print(f"==============>Finished {fname}")
@@ -99,7 +102,7 @@ def load_dataset(
     game_name,
     mode='full'
 ):
-    dataset_path = f'data/{game_name}_{mode}.pkl'
+    dataset_path = f'data_success/{game_name}_{mode}.pkl'
     with open(dataset_path, 'rb') as f:
         trajectories = pickle.load(f)
     print(f"=========> Loaded dataset {dataset_path}")
@@ -218,7 +221,7 @@ def get_batch(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--folder_name", default="dataset", type=str)
+    parser.add_argument("-f", "--folder_name", default="dataset_success", type=str)
     parser.add_argument("--mode", default='full', type=str)
     parser.add_argument("--steps", default=1, type=int)
     args = parser.parse_args()

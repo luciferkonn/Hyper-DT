@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 2022-05-12 13:11:43
-LastEditTime: 2023-05-10 20:41:19
+LastEditTime: 2023-05-12 16:54:47
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/trainer.py
 '''
@@ -98,11 +98,10 @@ class Trainer:
                 wandb.save(tf_file_loc)
             # evaluate model
             # if self.args.eval:
-            if False:
-                if epoch % self.eval_freq == 0:
-                    rew_sum = self.evaluation_rollout(
-                        eval_envs_list=self.eval_envs, num_steps=self.args.eval_steps,
-                        eval_log_interval=self.eval_log_interval, device=self.device)
+            if epoch % self.eval_freq == 0:
+                rew_sum = self.evaluation_rollout(
+                    eval_envs_list=self.eval_envs, num_steps=self.args.eval_steps,
+                    eval_log_interval=self.eval_log_interval, device=self.device)
 
     def evaluate(self):
         rew_sum = self.evaluation_rollout(
@@ -183,7 +182,7 @@ class Trainer:
     def evaluation_rollout(
         self,
         eval_envs_list,
-        num_steps=2500,
+        num_steps=1000,
         eval_log_interval=None,
         device='cpu',
     ):
@@ -192,56 +191,79 @@ class Trainer:
         # observations are dictionaries. Merge into single dictionary with batched
         # observations.
         for envs, game_name in zip(eval_envs_list, self.eval_game_name):
-            obs_list = [env.reset() for env in envs]
-            num_batch = len(envs)
-            obs = tree_map(lambda *arr: torch.from_numpy(np.stack(arr,
-                                                                  axis=0)).to(device=device), *obs_list)
-            obs['observations'] = obs['observations'].permute(0, 4, 1, 2, 3)
-            # ret = np.zeros([num_batch, 8])
-            done = np.zeros(num_batch, dtype=np.int32)
-            rew_sum = np.zeros(num_batch, dtype=np.float32)
+            success = 0
+            for i in range(1):
+                obs_list = []
+                for env in envs:
+                    env.reset()
+                    env.reset_model()
+                    obs_list.append(env.reset())
+                num_batch = len(envs)
+                obs = tree_map(lambda *arr: torch.from_numpy(np.stack(arr,
+                                                                    axis=0)).to(device=device), *obs_list)
+                # obs['observations'] = obs['observations'].permute(0, 4, 1, 2, 3)
+                # ret = np.zeros([num_batch, 8])
+                done = np.zeros(num_batch, dtype=np.int32)
+                rew_sum = np.zeros(num_batch, dtype=np.float32)
+                actions = torch.zeros(obs.shape[0], 1, 4, dtype=torch.float32).to(device=device)
+                rewards = torch.zeros(num_batch, 1, 1, dtype=torch.float32).to(device=device)
 
-            # frames = []
-            for t in range(num_steps):
-                # Collect observations
-                # frames.append(
-                #     np.concatenate([o['observations'][-1, ...] for o in obs_list], axis=1))
-                done_prev = done
+                inputs={
+                    'observations': obs.unsqueeze(1),
+                    'actions':actions,
+                    'rewards':rewards,
+                    }
+                # frames = []
+                success = 0
+                for t in range(num_steps):
+                    # Collect observations
+                    # frames.append(
+                    #     np.concatenate([o['observations'][-1, ...] for o in obs_list], axis=1))
+                    done_prev = done
 
-                actions = get_action(
-                    inputs=obs, model=self.model, return_range=self.return_range,
-                    single_return_token=self.single_return_token, opt_weight=0, num_samples=128,
-                    action_temperature=1.0, return_temperature=0.75,
-                    action_top_percentile=50, return_top_percentile=None)
+                    actions = get_action(
+                        inputs=inputs, model=self.model, return_range=self.return_range,
+                        single_return_token=self.single_return_token, opt_weight=0, num_samples=128,
+                        action_temperature=1.0, return_temperature=0.75,
+                        action_top_percentile=50, return_top_percentile=None, device=device)
 
-                # Collect step results and stack as a batch.
-                step_results = [env.step(act.detach().cpu().numpy())
-                                for env, act in zip(envs, actions)]
-                # print("=======>Actions")
-                # print(actions)
-                obs_list = [result[0] for result in step_results]
-                obs = tree_map(
-                    lambda *arr: torch.from_numpy(np.stack(arr, axis=0)).to(device=device), *obs_list)
-                obs['observations'] = obs['observations'].permute(
-                    0, 4, 1, 2, 3)
-                rew = np.stack([result[1] for result in step_results])
-                done = np.stack([result[2] for result in step_results])
-                # Advance state.
-                done = np.logical_or(done, done_prev).astype(np.int32)
-                rew = rew * (1 - done)
-                rew_sum += rew
-                if eval_log_interval and t % eval_log_interval == 0:
-                    print('game: %s step: %d done: %s reward: %s' %
-                          (game_name, t, done, rew_sum))
-                # Don't continue if all environments are done.
-                if np.all(done):
-                    break
-            print('game: %s step: %d done: %s reward: %s' %
-                  (game_name, t, done, rew_sum))
+                    # Collect step results and stack as a batch.
+                    step_results = [env.step(act.detach().cpu().numpy())
+                                    for env, act in zip(envs, actions)]
+                    # print("=======>Actions")
+                    # print(actions)
+                    obs_list = [result[0] for result in step_results]
+                    obs = tree_map(
+                        lambda *arr: torch.from_numpy(np.stack(arr, axis=0)).to(device=device), *obs_list)
+                    if obs.shape[0] == 2:
+                        print("No")
+                    # obs['observations'] = obs['observations'].permute(
+                    #     0, 4, 1, 2, 3)
+                    rew = np.stack([result[1] for result in step_results])
+                    done = np.stack([result[3]['success'] for result in step_results])
+                    # Advance state.
+                    done = np.logical_or(done, done_prev).astype(np.int32)
+                    rew = rew * (1 - done)
+                    rew_sum += rew
+                    if eval_log_interval and t % eval_log_interval == 0:
+                        print('game: %s step: %d done: %s reward: %s' %
+                            (game_name, t, done, rew_sum))
+                    # Don't continue if all environments are done.
+                    if np.all(done):
+                        success += 1  
+                    inputs={
+                        'observations': obs.unsqueeze(1),
+                        'actions':actions.unsqueeze(1),
+                        'rewards':torch.from_numpy(rew.reshape(-1, 1, 1)).to(device=device),
+                        }
+
+            print('game: %s step: %d done: %s reward: %s success_rate: %s' %
+                  (game_name, t, done, rew_sum, success/100))
             top3 = rew_sum[np.argsort(rew_sum)][-3:]
             print(f"mean {np.mean(rew_sum)}, top3 {np.mean(top3)}")
             if self.use_wandb:
                 wandb.log({f"eval/step/{game_name}": t,
+                           f"eval/success_rate/{game_name}": success/100,
                            f"eval/rew_mean/{game_name}": np.mean(rew_sum)})
         return np.mean(rew_sum)
 
@@ -257,14 +279,17 @@ def get_action(
     return_temperature: Optional[float] = 1.0,
     action_top_percentile: Optional[float] = None,
     return_top_percentile: Optional[float] = None,
+    device='cpu',
 ):
     obs, act, rew = inputs['observations'], inputs['actions'], inputs['rewards']
-    assert len(obs.shape) == 5
-    assert len(act.shape) == 2
+    # assert len(obs.shape) == 5
+    # assert len(act.shape) == 2
     act = act[:, -1].unsqueeze(1)
     inputs['actions'] = act
-    inputs['rewards'] = rew[:, -1].unsqueeze(1)
-    inputs['returns-to-go'] = torch.zeros_like(act)
+    inputs['rewards'] = rew[:, -1].unsqueeze(1).to(device=device)
+    inputs['returns-to-go'] = torch.zeros(act.shape[0], 1, 1).to(device=device)
+    if act.shape[0] == 2:
+        print("no")
     seq_len = obs.shape[1]
     timesteps = -1
 
@@ -304,7 +329,7 @@ def get_action(
 
         # Generate a sample from action logits
         act_logits = model(inputs)['action_logits'][:, timesteps, :]
-        act_sample = sample_from_logits(
-            act_logits, temperature=action_temperature,
-            top_percentile=action_top_percentile)
-    return act_sample
+        # act_sample = sample_from_logits(
+        #     act_logits, temperature=action_temperature,
+        #     top_percentile=action_top_percentile)
+    return act_logits.squeeze(-1)
