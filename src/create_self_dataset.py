@@ -134,3 +134,30 @@ def create_self_dataset(
     # stepwise_returns = torch.from_numpy(stepwise_returns)
 
     return obss, actions, done_idxs, rtg, timesteps, stepwise_returns
+
+
+def prepare_dataset(game_name):
+    obss = []
+    actions = []
+    returns = [0]
+    done_idxs = []
+    stepwise_returns = []
+
+    transitions_per_buffer = np.zeros(50, dtype=int)
+    num_traj = 0
+    trajectories, returns, traj_lens, states, state_mean, state_std = load_dataset(game_name)
+    num_timesteps = sum(traj_lens)
+    num_timesteps = max(int(1.*num_timesteps), 1)
+    sorted_inds = np.argsort(returns)
+    num_trajectories = 1
+    timesteps = traj_lens[sorted_inds[-1]]
+    ind = len(trajectories) - 2
+    while ind >= 0 and timesteps + traj_lens[sorted_inds[ind]] <= num_timesteps:
+        timesteps += traj_lens[sorted_inds[ind]]
+        num_trajectories += 1
+        ind -= 1
+    sorted_inds = sorted_inds[-num_trajectories:]
+
+    p_sample = traj_lens[sorted_inds] / sum(traj_lens[sorted_inds])
+
+    return num_trajectories, p_sample, trajectories, sorted_inds, state_mean, state_std

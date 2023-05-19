@@ -1,13 +1,15 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-13 10:26:44
+LastEditTime: 2023-05-14 16:57:49
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/train.py
 '''
 
 import random
-from src.create_self_dataset import create_self_dataset
+from src.load_dataset import get_batch
+from src.seq_trainer import SequenceTrainer
+from src.create_self_dataset import create_self_dataset, prepare_dataset
 from src.minlora import add_lora, get_lora_params
 import namegenerator
 import argparse
@@ -25,7 +27,7 @@ from torch.utils.tensorboard import SummaryWriter
 from src.env_wrapper import build_env_fn
 from src.create_dataset import create_dataset
 from src.env_utils import ATARI_NUM_ACTIONS, ATARI_NUM_REWARDS, ATARI_RETURN_RANGE
-from src.model import DecisionTransformer
+from src.decision_transformer import DecisionTransformer
 from torch.utils.data import Dataset
 from src.trainer import Trainer
 import metaworld
@@ -138,26 +140,37 @@ def run(args):
 
     # init model
     dt_model = DecisionTransformer(
-        num_actions=1000,
-        num_rewards=ATARI_NUM_REWARDS,
-        return_range=[-1,1],
+        state_dim=39,
+        act_dim=4,
+        max_length=20,
+        max_ep_len=1000,
+        hidden_size=args.n_embd,
         n_layer=args.n_layer,
-        n_embd=args.n_embd,
         n_head=args.n_head,
-        seq_len=args.seq_len,
-        attn_drop=args.attn_drop,
-        resid_drop=args.resid_drop,
-        predict_reward=True,
-        single_return_token=True,
-        device=args.device,
-        create_hnet=args.create_hnet,
-        num_cond_embs=len(args.train_game_list),
-        use_gw=args.use_gw,
+        n_inner=4*args.n_embd,
+        activation_function='relu',
+        n_positions=1024,
+        resid_pdrop=args.resid_drop,
+        attn_pdrop=args.attn_drop,
     )
 
+    dt_model.to(device=args.device)
     if args.device == 'cuda':
         if args.n_gpus:
             dt_model = nn.DataParallel(dt_model)
+
+    # init eval game list
+    ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
+
+    eval_game_list = []
+    eval_game_name = []
+    for name, env_cls in ml45.test_classes.items():
+        env= env_cls() 
+        task = random.choice([task for task in ml45.test_tasks
+                                if task.env_name == name])
+        env.set_task(task)
+        eval_game_list.append(env)
+        eval_game_name.append(name)
 
     # init train_dataset
     train_dataset_list = []
@@ -165,60 +178,91 @@ def run(args):
     # TODO: fix this
     meta_world_game_list = []
     if not args.eval:
-        meta_world_game_list = ['basketball-v2',] 
-        #                         'button-press-topdown-v2', 
-        # 'button-press-topdown-wall-v2', 
-        # 'button-press-v2', 'button-press-wall-v2', 'coffee-button-v2', 
-        # 'coffee-pull-v2', 'dial-turn-v2', 'disassemble-v2', 'door-open-v2', 
-        # 'drawer-close-v2', 'drawer-open-v2', 'faucet-open-v2', 'faucet-close-v2', 
-        # 'hammer-v2', 'handle-press-side-v2', 'handle-press-v2', 'handle-pull-side-v2', 
-        # 'handle-pull-v2', 'lever-pull-v2', 'plate-slide-v2', 
-        # 'plate-slide-side-v2', 'plate-slide-back-v2', 'plate-slide-back-side-v2', 
-        # 'peg-unplug-side-v2', 'soccer-v2', 'stick-push-v2', 'stick-pull-v2', 'window-open-v2', 'window-close-v2']
-        for name in meta_world_game_list:
-            print(f"======>Loading Game {name}")
-            if True:
-                obss, actions, done_idxs, rtgs, timesteps, rewards = create_self_dataset(
-                    args.num_buffers, args.data_steps, name, args.trajectories_per_buffer)
-            else:
-                obss, actions, done_idxs, rtgs, timesteps, rewards = create_dataset(
-                    args.num_buffers, args.data_steps, args.folder_prefix, name,
-                    str(i+1), args.trajectories_per_buffer)
-            train_dataset = StateActionReturnDataset(
-                obss, args.seq_len*3, actions, done_idxs, rtgs, timesteps, rewards)
-            train_dataset_list.append(train_dataset)
-            train_game_list.append(f"{name}")
+        optimizer = torch.optim.AdamW(
+            dt_model.parameters(),
+            lr=args.optimizer_lr,
+            weight_decay=args.weight_decay,
+        )
+        trainer_list = []
+        scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer,
+            lambda steps: min((steps+1)/args.warmup_steps, 1)
+        )
+        if args.apply_lora:
+            meta_world_game_list = ['bin-picking-v2']
+            for name, env_cls in ml45.test_classes.items():
+                if name in meta_world_game_list:
+                    env= env_cls() 
+                    task = random.choice([task for task in ml45.test_tasks
+                                            if task.env_name == name])
+                    env.set_task(task)
+                    print(f"======>Loading Game {name}")
+                    num_traj, p_sample, traj, sorted_inds, state_mean, state_std = prepare_dataset(name)
 
-    # init eval game list
-    ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
+                    trainer = SequenceTrainer(
+                        model=dt_model,
+                        optimizer=optimizer,
+                        batch_size=args.batch_size,
+                        get_batch=get_batch,
+                        scheduler=scheduler,
+                        loss_fn=lambda s_hat, a_hat, r_hat, s, a, r: torch.mean((a_hat - a)**2),
+                        num_trajectories=num_traj,
+                        p_sample=p_sample,
+                        trajectories=traj,
+                        sorted_inds=sorted_inds,
+                        state_mean=state_mean,
+                        state_std=state_std,
+                        run_dir=run_dir,
+                        eval_envs=eval_game_list,
+                        eval_name_list=eval_game_name,
+                        train_envs=[env],
+                        train_name_list=[name],
+                        device=args.device
+                    )
+                    trainer_list.append(trainer)
+        else:
+            meta_world_game_list = ['basketball-v2', 
+                                    'button-press-topdown-v2', 
+            'button-press-topdown-wall-v2', 
+            'button-press-v2', 'button-press-wall-v2', 'coffee-button-v2', 
+            'coffee-pull-v2', 'dial-turn-v2', 'disassemble-v2', 'door-open-v2', 
+            'drawer-close-v2', 'drawer-open-v2', 'faucet-open-v2', 'faucet-close-v2', 
+            'hammer-v2', 'handle-press-side-v2', 'handle-press-v2', 'handle-pull-side-v2', 
+            'handle-pull-v2', 'lever-pull-v2', 'plate-slide-v2', 
+            'plate-slide-side-v2', 'plate-slide-back-v2', 'plate-slide-back-side-v2', 
+            'peg-unplug-side-v2', 'soccer-v2', 'stick-push-v2', 'stick-pull-v2', 'window-open-v2', 'window-close-v2']
+            for name, env_cls in ml45.train_classes.items():
+                if name in meta_world_game_list:
+                    env= env_cls() 
+                    task = random.choice([task for task in ml45.train_tasks
+                                            if task.env_name == name])
+                    env.set_task(task)
+                    print(f"======>Loading Game {name}")
+                    num_traj, p_sample, traj, sorted_inds, state_mean, state_std = prepare_dataset(name)
 
-    eval_game_list = []
-    eval_game_name = []
-    for name, env_cls in ml45.train_classes.items():
-        if name in meta_world_game_list:
-            env_batch = [env_cls() for i in range(args.num_eval_envs)]
-            task = random.choice([task for task in ml45.train_tasks
-                                    if task.env_name == name])
-            for env in env_batch:
-                env.set_task(task)
-            eval_game_list.append(env_batch)
-            eval_game_name.append(name)
-
-
-    trainer = Trainer(model=dt_model,
-                      train_dataset_list=train_dataset_list,
-                      train_game_list=train_game_list,
-                      eval_env_list=eval_game_list,
-                      eval_game_name=eval_game_name,
-                      args=args,
-                      optimizer=None,
-                      run_dir=run_dir,
-                      grad_norm_clip=args.grad_norm_clip,
-                      log_interval=args.log_interval,
-                      use_wandb=args.use_wandb,
-                      eval_freq=args.eval_freq,
-                      training_samples=args.training_samples,
-                      n_gpus=args.n_gpus)
+                    trainer = SequenceTrainer(
+                        model=dt_model,
+                        optimizer=optimizer,
+                        batch_size=args.batch_size,
+                        get_batch=get_batch,
+                        scheduler=scheduler,
+                        loss_fn=lambda s_hat, a_hat, r_hat, s, a, r: torch.mean((a_hat - a)**2),
+                        num_trajectories=num_traj,
+                        p_sample=p_sample,
+                        trajectories=traj,
+                        sorted_inds=sorted_inds,
+                        state_mean=state_mean,
+                        state_std=state_std,
+                        run_dir=run_dir,
+                        eval_envs=eval_game_list,
+                        eval_name_list=eval_game_name,
+                        train_envs=[env],
+                        train_name_list=[name],
+                        device=args.device
+                    )
+                    trainer_list.append(trainer)
+    
+    # totoal params
     total_params = sum(params.numel() for params in dt_model.parameters())
     print(f"======> Total number of params are {total_params}")
     if args.load_path != '0':
@@ -230,14 +274,15 @@ def run(args):
         epoch = 0
     
     if args.apply_lora:
-        print("========>Adding LoRA")
-        add_lora(dt_model.module.transformer)
-        parameters = [
-            {"params": list(get_lora_params(dt_model.module.transformer))}
-        ]
-        optimizer = torch.optim.AdamW(parameters, lr=args.optimizer_lr)
-        total_params = sum(params.numel() for params in dt_model.parameters())
-        print(f"======> Total number of params after LoRA {total_params}")
+        pass
+        # print("========>Adding LoRA")
+        # add_lora(dt_model)
+        # parameters = [
+        #     {"params": list(get_lora_params(dt_model))}
+        # ]
+        # optimizer = torch.optim.AdamW(parameters, lr=args.optimizer_lr)
+        # total_params = sum(params.numel() for params in dt_model.parameters())
+        # print(f"======> Total number of params after LoRA {total_params}")
     else:
         optimizer = torch.optim.AdamW(
             dt_model.parameters(),
@@ -247,10 +292,25 @@ def run(args):
 
     if args.train:
         print("========>Start Training")
-        trainer.train(epoch, optimizer, apply_lora=args.apply_lora)
+        for t in range(args.max_epochs):
+            for trainer in trainer_list:
+                if args.apply_lora:
+                    pass
+                    # trainer.set_optimizer(optimizer=optimizer)
+                outputs=trainer.train_iteration(
+                    num_steps=10000,
+                    iter_num=t+1,
+                    print_logs=True
+                )
+                # logs= trainer.evaluate()
+                if args.use_wandb:
+                    wandb.log(outputs)
+                        # wandb.log(logs)
     elif args.eval:
         print("========>Start Evaluation")
-        trainer.evaluate()
+        logs= trainer.evaluate()
+        if args.use_wandb:
+            wandb.log(logs)
     else:
         NotImplementedError("No actions for training or evaluation")
 
@@ -316,7 +376,7 @@ if __name__ == '__main__':
     parser.add_argument('--folder_prefix', type=str, default=None)
 
     parser.add_argument("--save_freq", default=10, type=int)
-    parser.add_argument('--experiment_name', default='atari', type=str)
+    parser.add_argument('--experiment_name', default='metaworld', type=str)
     parser.add_argument('--cuda_cores', type=str, default=None)
     parser.add_argument('--wandb_status', type=str, default='online')
 

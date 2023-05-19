@@ -29,7 +29,7 @@ echo "lora" $lora
 echo "game_name" $game_name
 
 python train.py --create_hnet=$create_hnet --max_epochs=1000 --eval_freq 10 --n_embd=512 --n_layer=4 --use_wandb=$use_wandb\
-  --n_head=8 --device='cuda' --n_gpus --num_workers=10 --data_steps $data_steps --training_samples=$samples --use_gw=$gw\
+  --n_head=8 --device='cuda' --num_workers=10 --data_steps $data_steps --training_samples=$samples --use_gw=$gw\
   --load_path=$model_path --num_datasets 1 --use_gw=$gw --folder_prefix='/home/jikun' --batch_size=8 --eval=$eval --train=$train --apply_lora=$lora\
   --train_game_list $game_name\
   --eval_game_list $game_name\

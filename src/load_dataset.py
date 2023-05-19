@@ -1,7 +1,7 @@
 '''
 Author: Jikun Kang
 Date: 1969-12-31 19:00:00
-LastEditTime: 2023-05-12 15:44:29
+LastEditTime: 2023-05-14 22:06:50
 LastEditors: Jikun Kang
 FilePath: /Hyper-DT/src/load_dataset.py
 '''
@@ -77,8 +77,8 @@ def prepare_dataset(
     if num_files == 0:
         return False
 
-    for name in file_name_list:
-        # name = f'{i}.hdf5'
+    for i in range(0, 1000, steps):
+        name = f'{i}.hdf5'
         print(f'Reading file {name}')
         file_name = os.path.join(dataset_dir, name)
         with h5py.File(file_name, 'r') as f:
@@ -163,6 +163,9 @@ def get_batch(
     )
 
     s, a, r, d, rtg, timesteps, mask = [], [], [], [], [], [], []
+    scale = 1000.
+    max_ep_len = 1000
+
     for i in range(batch_size):
         traj = trajectories[int(sorted_inds[batch_inds[i]])]
         si = random.randint(0, traj['rewards'].shape[0] - 1)
@@ -176,13 +179,12 @@ def get_batch(
             d.append(traj['terminals'][si:si + max_len].reshape(1, -1))
         else:
             d.append(traj['dones'][si:si + max_len].reshape(1, -1))
-        # timesteps.append(np.arange(si, si + s[-1].shape[1]).reshape(1, -1))
-        # timesteps[-1][timesteps[-1] >= max_ep_len] = max_ep_len - \
-            1  # padding cutoff
-        # rtg.append(discount_cumsum(traj['rewards'][si:], gamma=1.)[
-        #            :s[-1].shape[1] + 1].reshape(1, -1, 1))
-        # if rtg[-1].shape[1] <= s[-1].shape[1]:
-        #     rtg[-1] = np.concatenate([rtg[-1], np.zeros((1, 1, 1))], axis=1)
+        timesteps.append(np.arange(si, si + s[-1].shape[1]).reshape(1, -1))
+        timesteps[-1][timesteps[-1] >= max_ep_len] = max_ep_len - 1  # padding cutoff
+        rtg.append(discount_cumsum(traj['rewards'][si:], gamma=1.)[
+                :s[-1].shape[1] + 1].reshape(1, -1, 1))
+        if rtg[-1].shape[1] <= s[-1].shape[1]:
+            rtg[-1] = np.concatenate([rtg[-1], np.zeros((1, 1, 1))], axis=1)
 
         # padding and state + reward normalization
         tlen = s[-1].shape[1]
@@ -195,12 +197,12 @@ def get_batch(
                                tlen, 1)), r[-1]], axis=1)
         d[-1] = np.concatenate([np.ones((1, max_len - tlen))
                                * 2, d[-1]], axis=1)
-        # rtg[-1] = np.concatenate([np.zeros((1, max_len - tlen, 1)),
-        #                          rtg[-1]], axis=1) / scale
-        # timesteps[-1] = np.concatenate([np.zeros((1,
-        #                                max_len - tlen)), timesteps[-1]], axis=1)
-        # mask.append(np.concatenate(
-        #     [np.zeros((1, max_len - tlen)), np.ones((1, tlen))], axis=1))
+        rtg[-1] = np.concatenate([np.zeros((1, max_len - tlen, 1)),
+                                 rtg[-1]], axis=1) / scale
+        timesteps[-1] = np.concatenate([np.zeros((1,
+                                       max_len - tlen)), timesteps[-1]], axis=1)
+        mask.append(np.concatenate(
+            [np.zeros((1, max_len - tlen)), np.ones((1, tlen))], axis=1))
 
     s = torch.from_numpy(np.concatenate(s, axis=0)).to(
         dtype=torch.float32, device=device)
@@ -210,23 +212,25 @@ def get_batch(
         dtype=torch.float32, device=device)
     d = torch.from_numpy(np.concatenate(d, axis=0)).to(
         dtype=torch.long, device=device)
-    # rtg = torch.from_numpy(np.concatenate(rtg, axis=0)).to(
-    #     dtype=torch.float32, device=device)
-    # timesteps = torch.from_numpy(np.concatenate(timesteps, axis=0)).to(
-    #     dtype=torch.long, device=device)
-    # mask = torch.from_numpy(np.concatenate(mask, axis=0)).to(device=device)
+    rtg = torch.from_numpy(np.concatenate(rtg, axis=0)).to(
+        dtype=torch.float32, device=device)
+    timesteps = torch.from_numpy(np.concatenate(timesteps, axis=0)).to(
+        dtype=torch.long, device=device)
+    mask = torch.from_numpy(np.concatenate(mask, axis=0)).to(device=device)
 
-    return s, a, r, d 
+    return s, a, r, d, rtg, timesteps, mask
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--folder_name", default="dataset_success", type=str)
+    parser.add_argument("-f", "--folder_name", default="dataset_test", type=str)
     parser.add_argument("--mode", default='full', type=str)
-    parser.add_argument("--steps", default=1, type=int)
+    parser.add_argument("--steps", default=100, type=int)
     args = parser.parse_args()
-    meta_world_game_list = ['assembly-v2', 'basketball-v2', 'button-press-topdown-v2', 
-    'button-press-topdown-wall-v2', 'button-press-v2', 'button-press-wall-v2', 'coffee-button-v2', 'coffee-pull-v2', 'coffee-push-v2', 'dial-turn-v2', 'disassemble-v2', 'door-close-v2', 'door-open-v2', 'drawer-close-v2', 'drawer-open-v2', 'faucet-open-v2', 'faucet-close-v2', 'hammer-v2', 'handle-press-side-v2', 'handle-press-v2', 'handle-pull-side-v2', 'handle-pull-v2', 'lever-pull-v2', 'peg-insert-side-v2', 'pick-place-wall-v2', 'pick-out-of-hole-v2', 'reach-v2', 'push-back-v2', 'push-v2', 'pick-place-v2', 'plate-slide-v2', 'plate-slide-side-v2', 'plate-slide-back-v2', 'plate-slide-back-side-v2', 'peg-unplug-side-v2', 'soccer-v2', 'stick-push-v2', 'stick-pull-v2', 'push-wall-v2', 'reach-wall-v2', 'shelf-place-v2', 'sweep-into-v2', 'sweep-v2', 'window-open-v2', 'window-close-v2']
+    # meta_world_game_list = ['assembly-v2', 'basketball-v2', 'button-press-topdown-v2', 
+    # 'button-press-topdown-wall-v2', 'button-press-v2', 'button-press-wall-v2', 'coffee-button-v2', 'coffee-pull-v2', 'coffee-push-v2', 'dial-turn-v2', 'disassemble-v2', 'door-close-v2', 'door-open-v2', 'drawer-close-v2', 'drawer-open-v2', 'faucet-open-v2', 'faucet-close-v2', 'hammer-v2', 'handle-press-side-v2', 'handle-press-v2', 'handle-pull-side-v2', 'handle-pull-v2', 'lever-pull-v2', 'peg-insert-side-v2', 'pick-place-wall-v2', 'pick-out-of-hole-v2', 'reach-v2', 'push-back-v2', 'push-v2', 'pick-place-v2', 'plate-slide-v2', 'plate-slide-side-v2', 'plate-slide-back-v2', 'plate-slide-back-side-v2', 'peg-unplug-side-v2', 'soccer-v2', 'stick-push-v2', 'stick-pull-v2', 'push-wall-v2', 'reach-wall-v2', 'shelf-place-v2', 'sweep-into-v2', 'sweep-v2', 'window-open-v2', 'window-close-v2']
+    meta_world_game_list = ['bin-picking-v2', 'door-lock-v2', 'door-unlock-v2']
+
     for name in meta_world_game_list:
         prepare_dataset(folder_name=args.folder_name, game_name=name, mode=args.mode, steps=args.steps)
     # load_dataset('bigfish')

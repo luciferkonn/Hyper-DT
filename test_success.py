@@ -1,8 +1,5 @@
-import os
-import random
-import h5py
-import metaworld
-import numpy as np
+import pytest
+
 from metaworld.envs.mujoco.env_dict import ALL_V1_ENVIRONMENTS, ALL_V2_ENVIRONMENTS
 from metaworld.policies import *
 from tests.metaworld.envs.mujoco.sawyer_xyz.utils import trajectory_summary
@@ -123,6 +120,125 @@ test_cases_latest_nonoise = [
     ['window-open-v2', SawyerWindowOpenV2Policy(), 0., .94],
 ]
 
+test_cases_latest_noisy = [
+    # name, policy, action noise pct, success rate
+    ['assembly-v1', SawyerAssemblyV1Policy(), .1, .69],
+    ['assembly-v2', SawyerAssemblyV2Policy(), .1, .70],
+    ['basketball-v1', SawyerBasketballV1Policy(), .1, .97],
+    ['basketball-v2', SawyerBasketballV2Policy(), .1, .96],
+    ['bin-picking-v2', SawyerBinPickingV2Policy(), .1, .96],
+    ['box-close-v1', SawyerBoxCloseV1Policy(), .1, .84],
+    ['box-close-v2', SawyerBoxCloseV2Policy(), .1, .82],
+    ['button-press-topdown-v1', SawyerButtonPressTopdownV1Policy(), .1, .98],
+    ['button-press-topdown-v2', SawyerButtonPressTopdownV2Policy(), .1, .93],
+    ['button-press-topdown-wall-v1', SawyerButtonPressTopdownWallV1Policy(), .1, .99],
+    ['button-press-topdown-wall-v2', SawyerButtonPressTopdownWallV2Policy(), .1, .95],
+    ['button-press-v1', SawyerButtonPressV1Policy(), .1, .98],
+    ['button-press-v2', SawyerButtonPressV2Policy(), .1, .98],
+    ['button-press-wall-v1', SawyerButtonPressWallV1Policy(), .1, .94],
+    ['button-press-wall-v2', SawyerButtonPressWallV2Policy(), .1, .92],
+    ['coffee-button-v1', SawyerCoffeeButtonV1Policy(), .1, .99],
+    ['coffee-button-v2', SawyerCoffeeButtonV2Policy(), .1, .99],
+    ['coffee-pull-v1', SawyerCoffeePullV1Policy(), .1, .95],
+    ['coffee-pull-v2', SawyerCoffeePullV2Policy(), .1, .82],
+    ['coffee-push-v1', SawyerCoffeePushV1Policy(), .1, .86],
+    ['coffee-push-v2', SawyerCoffeePushV2Policy(), .1, .88],
+    ['dial-turn-v1', SawyerDialTurnV1Policy(), .1, 0.84],
+    ['dial-turn-v2', SawyerDialTurnV2Policy(), .1, 0.84],
+    ['disassemble-v1', SawyerDisassembleV1Policy(), .1, .91],
+    ['disassemble-v2', SawyerDisassembleV2Policy(), .1, .88],
+    ['door-close-v1', SawyerDoorCloseV1Policy(), .1, .99],
+    ['door-close-v2', SawyerDoorCloseV2Policy(), .1, .97],
+    ['door-lock-v1', SawyerDoorLockV1Policy(), .1, 1.],
+    ['door-lock-v2', SawyerDoorLockV2Policy(), .1, .96],
+    ['door-open-v1', SawyerDoorOpenV1Policy(), .1, .93],
+    ['door-open-v2', SawyerDoorOpenV2Policy(), .1, .92],
+    ['door-unlock-v1', SawyerDoorUnlockV1Policy(), .1, .96],
+    ['door-unlock-v2', SawyerDoorUnlockV2Policy(), .1, .97],
+    ['drawer-close-v1', SawyerDrawerCloseV1Policy(), .1, .64],
+    ['drawer-close-v2', SawyerDrawerCloseV2Policy(), .1, .99],
+    ['drawer-open-v1', SawyerDrawerOpenV1Policy(), .1, .97],
+    ['drawer-open-v2', SawyerDrawerOpenV2Policy(), .1, .97],
+    ['faucet-close-v1', SawyerFaucetCloseV1Policy(), .1, .93],
+    ['faucet-close-v2', SawyerFaucetCloseV2Policy(), .1, 1.],
+    ['faucet-open-v1', SawyerFaucetOpenV1Policy(), .1, .99],
+    ['faucet-open-v2', SawyerFaucetOpenV2Policy(), .1, .99],
+    ['hammer-v1', SawyerHammerV1Policy(), .1, .97],
+    ['hammer-v2', SawyerHammerV2Policy(), .1, .96],
+    ['hand-insert-v1', SawyerHandInsertV1Policy(), .1, 0.95],
+    ['hand-insert-v2', SawyerHandInsertV2Policy(), .1, 0.86],
+    ['handle-press-side-v2', SawyerHandlePressSideV2Policy(), .1, .98],
+    ['handle-press-v1', SawyerHandlePressV1Policy(), .1, 1.],
+    ['handle-press-v2', SawyerHandlePressV2Policy(), .1, 1.],
+    ['handle-pull-v1', SawyerHandlePullV1Policy(), .1, 1.],
+    ['handle-pull-v2', SawyerHandlePullV2Policy(), .1, .99],
+    ['handle-pull-side-v1', SawyerHandlePullSideV1Policy(), .1, .75],
+    ['handle-pull-side-v2', SawyerHandlePullSideV2Policy(), .1, .71],
+    ['peg-insert-side-v2', SawyerPegInsertionSideV2Policy(), .1, .87],
+    ['lever-pull-v2', SawyerLeverPullV2Policy(), .1, .90],
+    ['peg-unplug-side-v1', SawyerPegUnplugSideV1Policy(), .1, .97],
+    ['peg-unplug-side-v2', SawyerPegUnplugSideV2Policy(), .1, .80],
+    ['pick-out-of-hole-v1', SawyerPickOutOfHoleV1Policy(), .1, .87],
+    ['pick-out-of-hole-v2', SawyerPickOutOfHoleV2Policy(), .1, .89],
+    ['pick-place-v2', SawyerPickPlaceV2Policy(), .1, .83],
+    ['pick-place-wall-v2', SawyerPickPlaceWallV2Policy(), .1, .83],
+    ['plate-slide-back-side-v2', SawyerPlateSlideBackSideV2Policy(), .1, .95],
+    ['plate-slide-back-v1', SawyerPlateSlideBackV1Policy(), .1, .95],
+    ['plate-slide-back-v2', SawyerPlateSlideBackV2Policy(), .1, .94],
+    ['plate-slide-side-v1', SawyerPlateSlideSideV1Policy(), .1, .76],
+    ['plate-slide-side-v2', SawyerPlateSlideSideV2Policy(), .1, .78],
+    ['plate-slide-v1', SawyerPlateSlideV1Policy(), .1, .97],
+    ['plate-slide-v2', SawyerPlateSlideV2Policy(), .1, .97],
+    ['reach-v2', SawyerReachV2Policy(), .1, .98],
+    ['reach-wall-v2', SawyerReachWallV2Policy(), .1, .96],
+    ['push-back-v1', SawyerPushBackV1Policy(), .1, .90],
+    ['push-back-v2', SawyerPushBackV2Policy(), .0, .91],
+    ['push-v2', SawyerPushV2Policy(), .1, .88],
+    ['push-wall-v2', SawyerPushWallV2Policy(), .1, .82],
+    ['shelf-place-v1', SawyerShelfPlaceV1Policy(), .1, .90],
+    ['shelf-place-v2', SawyerShelfPlaceV2Policy(), .1, .89],
+    ['soccer-v1', SawyerSoccerV1Policy(), .1, .91],
+    ['soccer-v2', SawyerSoccerV2Policy(), .1, .81],
+    ['stick-pull-v1', SawyerStickPullV1Policy(), .1, 0.81],
+    ['stick-pull-v2', SawyerStickPullV2Policy(), .1, 0.81],
+    ['stick-push-v1', SawyerStickPushV1Policy(), .1, 0.95],
+    ['stick-push-v2', SawyerStickPushV2Policy(), .1, 0.95],
+    ['sweep-into-v1', SawyerSweepIntoV1Policy(), .1, 1.],
+    ['sweep-into-v2',  SawyerSweepIntoV2Policy(), .1, 0.86],
+    ['sweep-v1', SawyerSweepV1Policy(), .1, 1.],
+    ['sweep-v2', SawyerSweepV2Policy(), .0, 0.99],
+    ['window-close-v2', SawyerWindowCloseV2Policy(), .1, .95],
+    ['window-open-v2', SawyerWindowOpenV2Policy(), .1, .93],
+]
+
+# Combine test cases into a single array to pass to parameterized test function
+test_cases = []
+# for row in test_cases_old_nonoise:
+#     test_cases.append(pytest.param(*row, marks=pytest.mark.skip))
+# for row in test_cases_old_noisy:
+#     test_cases.append(pytest.param(*row, marks=pytest.mark.skip))
+for row in test_cases_latest_nonoise:
+    test_cases.append(pytest.param(*row, marks=pytest.mark.skip))
+for row in test_cases_latest_noisy:
+    test_cases.append(pytest.param(*row, marks=pytest.mark.basic))
+
+ALL_ENVS = {**ALL_V1_ENVIRONMENTS, **ALL_V2_ENVIRONMENTS}
+
+
+@pytest.fixture(scope='function')
+def env(request):
+    e = ALL_ENVS[request.param]()
+    e._partially_observable = False
+    e._freeze_rand_vec = False
+    e._set_task_called = True
+    return e
+
+
+@pytest.mark.parametrize(
+    'env,policy,act_noise_pct,expected_success_rate',
+    test_cases,
+    indirect=['env']
+)
 def test_scripted_policy(env, policy, act_noise_pct, expected_success_rate, iters=100):
     """Tests whether a given policy solves an environment in a stateless manner
     Args:
@@ -143,140 +259,3 @@ def test_scripted_policy(env, policy, act_noise_pct, expected_success_rate, iter
         successes += float(trajectory_summary(env, policy, act_noise_pct, render=False)[0])
     print(successes)
     assert successes >= expected_success_rate * iters
-
-
-def obs_space_error_text(env, obs):
-    return "Obs Out of Bounds\n\tlow: {}, \n\tobs: {}, \n\thigh: {}".format(
-        env.observation_space.low[[0, 1, 2, -3, -2, -1]],
-        obs[[0, 1, 2, -3, -2, -1]],
-        env.observation_space.high[[0, 1, 2, -3, -2, -1]]
-    )
-
-def reset_data():
-    return {
-        'observations': [],
-        'actions': [],
-        'terminals': [],
-        'rewards': [],
-        # 'infos': [],
-        'next_observations': [],
-    }
-
-def npify(data):
-    for k in data:
-        if k == 'terminals':
-            dtype = np.bool_
-        else:
-            dtype = np.float32
-        
-        data[k] = np.array(data[k], dtype=dtype)
-
-def append_data(data, s, a, r, next_s, done):
-    data['observations'].append(s)
-    data['actions'].append(a)
-    data['rewards'].append(r)
-    data['next_observations'].append(next_s)
-    data['terminals'].append(done)
-
-def trajectory_generator(env, policy, act_noise_pct, render=False):
-    """Tests whether a given policy solves an environment
-    Args:
-        env (metaworld.envs.MujocoEnv): Environment to test
-        policy (metaworld.policies.policies.Policy): Policy that's supposed to
-            succeed in env
-        act_noise_pct (np.ndarray): Decimal value(s) indicating std deviation of
-            the noise as a % of action space
-        render (bool): Whether to render the env in a GUI
-    Yields:
-        (float, bool, dict): Reward, Done flag, Info dictionary
-    """
-    action_space_ptp = env.action_space.high - env.action_space.low
-    data = reset_data()
-
-    env.reset()
-    env.reset_model()
-    o = env.reset()
-    assert o.shape == env.observation_space.shape
-    assert env.observation_space.contains(o), obs_space_error_text(env, o)
-
-    for i in range(env.max_path_length):
-        a = policy.get_action(o)
-        a = np.random.normal(a, act_noise_pct * action_space_ptp)
-
-        next_o, r, done, info = env.step(a)
-        done |= bool(info['success'])
-        append_data(data, o, a, r, next_o, done)
-        assert env.observation_space.contains(next_o), obs_space_error_text(env, next_o)
-        if render:
-            env.render()
-        o = next_o
-        # if done or info['success']:
-        if done or info['success']:
-            return data
-
-    # append_data(data, o, a, r, next_o, True)
-    return None 
-
-def run():
-    ml45 = metaworld.ML45()
-    for i in range(1000):
-        training_envs = []
-        train_env_names = []
-        # for name, env_cls in ml45.train_classes.items():
-        #     env = env_cls()
-        #     task = random.choice([task for task in ml45.train_tasks
-        #                             if task.env_name == name])
-        #     env.set_task(task)
-        #     training_envs.append(env)
-        #     train_env_names.append(name)
-        for name, env_cls in ml45.test_classes.items():
-            env = env_cls()
-            task = random.choice([task for task in ml45.test_tasks
-                                    if task.env_name == name])
-            env.set_task(task)
-            training_envs.append(env)
-            train_env_names.append(name)
-        print(train_env_names)
-
-        for env, name in zip(training_envs, train_env_names):
-            print(f"====>Current Game {name}")
-            data_dir = os.path.join("dataset_test", name)
-            os.makedirs(data_dir, exist_ok=True)
-
-            for row in test_cases_latest_nonoise:
-                if name == row[0]:
-                    print(f"=====>Found Policy {row[0]}")
-                    policy = row[1]
-                    act_noise = row[2]
-                    print(f"====>Generating episode {i}")
-                    data = trajectory_generator(env, policy,act_noise)
-                    if data is not None:
-                        dataset = h5py.File(f"{data_dir}/{i}.hdf5", "w")
-                        npify(data)
-                        for k in data:
-                            dataset.create_dataset(k, data=data[k], compression='gzip')
-                        print(f"====>Generated data {i}")
-
-def test():
-
-    ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
-
-    testing_envs = []
-    test_game_list = []
-    for name, env_cls in ml45.test_classes.items():
-        test_game_list.append(name)
-    print(test_game_list)
-    #     env = env_cls()
-    #     task = random.choice([task for task in ml45.test_tasks
-    #                             if task.env_name == name])
-    #     env.set_task(task)
-    #     testing_envs.append(env)
-
-    # for env in testing_envs:
-    #     obs = env.reset()  # Reset environment
-    #     a = env.action_space.sample()  # Sample an action
-    #     obs, reward, done, info = env.step(a)  # Step the environoment with the sampled random action
-
-if __name__ == "__main__":
-    run()
-    # test()
