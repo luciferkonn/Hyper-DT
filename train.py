@@ -6,7 +6,9 @@ LastEditors: Jikun Kang
 FilePath: /Hyper-DT/train.py
 '''
 
+from functools import partial
 import random
+from src.minlora.model import LoRAParametrization
 from src.minlora import add_lora, get_lora_params
 import namegenerator
 import argparse
@@ -114,19 +116,20 @@ def run(args):
     # set seed
     set_seed(args.seed)
 
+
     # Init Logger
     if args.use_wandb:
         run = wandb.init(
-            config=args,
-            project=args.experiment_name,
-            entity=args.user_name,
-            notes=socket.gethostname(),
-            name=f"seed_{str(args.seed)}",
-            group=args.game_name,
-            dir=str(run_dir),
-            job_type='training',
-            reinit=True,
-            mode=args.wandb_status,
+            # config=args,
+            # project=args.experiment_name,
+            # entity=args.user_name,
+            # notes=socket.gethostname(),
+            # name=f"seed_{str(args.mem_slots)}",
+            # group=args.game_name,
+            # dir=str(run_dir),
+            # job_type='training',
+            # reinit=True,
+            # mode=args.wandb_status,
         )
         logger = None
     else:
@@ -203,8 +206,15 @@ def run(args):
         epoch = 0
     
     if args.apply_lora:
+        default_lora_config = {  # specify which layers to add lora to, by default only add to linear layers
+            nn.Linear: {
+                "weight": partial(LoRAParametrization.from_linear, rank=args.rank, 
+                                  lora_dropout_p=args.lora_dropout, lora_alpha=args.lora_alpha),
+            },
+        }
         print("========>Adding LoRA")
-        add_lora(dt_model.module.transformer)
+        print(f"=======>Rank {args.rank}, dropout {args.lora_dropout}, alpha {args.lora_alpha}")
+        add_lora(dt_model.module.transformer, lora_config=default_lora_config)
         parameters = [
             {"params": list(get_lora_params(dt_model.module.transformer))}
         ]
@@ -232,37 +242,59 @@ def run(args):
         logger.close()
 
 
+# # Define sweep config
+# sweep_configuration = {
+#     'method': 'grid',
+#     'name': 'sweep',
+#     'metric': {'goal': 'maximize', 'name': 'eval/rew_mean/StarGunner'},
+#     'parameters': 
+#     {
+#         'mem_slots': {'values': [17, 18, 1000, 2000, 3000, 4000]},
+#         # 'epochs': {'values': [5, 10, 15]},
+#         # 'lr': {'max': 0.1, 'min': 0.0001}
+#     }
+# }
+
+# # Initialize sweep by passing in config. 
+# # (Optional) Provide a name of the project.
+# sweep_id = wandb.sweep(
+# sweep=sweep_configuration, 
+# project='tune_mem'
+# )
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # Model configs
     parser.add_argument('--n_embd', type=int, default=512)  # 1280
-    parser.add_argument('--n_layer', type=int, default=1)  # 10
-    parser.add_argument('--n_head', type=int, default=1)
+    parser.add_argument('--n_layer', type=int, default=4)  # 10
+    parser.add_argument('--n_head', type=int, default=8)
     parser.add_argument('--seq_len', type=int, default=28)
     parser.add_argument('--attn_drop', type=float, default=0.1)
     parser.add_argument('--resid_drop', type=float, default=0.1)
     parser.add_argument('--create_hnet', type=str2bool, default=False)
     parser.add_argument('--use_gw', type=str2bool, default=False)
+    parser.add_argument('--mem_slots', type=int, default=1092)
 
     # Logging configs
     parser.add_argument('--log_interval', type=int, default=100)
-    parser.add_argument('--use_wandb', type=str2bool, default=False)
+    parser.add_argument('--use_wandb', type=str2bool, default=True)
     parser.add_argument("--user_name", type=str, default='jaxonkang',
                         help="[for wandb usage], to specify user's name for simply collecting training data.")
-    parser.add_argument("--n_gpus", action='store_true', default=False)
+    parser.add_argument("--n_gpus", action='store_true', default=True)
 
     # Training configs
-    parser.add_argument('--max_epochs', type=int, default=100)
+    parser.add_argument('--max_epochs', type=int, default=21)
     parser.add_argument('--steps_per_iter', type=int, default=10000)
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--training_samples', type=int, default=1000)
-    parser.add_argument('--load_path', type=str, default=None)
-    parser.add_argument('--apply_lora', type=str2bool, default=False)
-    parser.add_argument("--train", type=str2bool, default=False)
+    parser.add_argument('--load_path', type=str, default='/home/jikun/Downloads/tf_model.pt')
+    parser.add_argument('--apply_lora', type=str2bool, default=True)
+    parser.add_argument("--train", type=str2bool, default=True)
 
     # Evaluation configs
     parser.add_argument('--eval_steps', type=int, default=5000)
-    parser.add_argument('--eval_game_list', nargs='+', default=[])
+    parser.add_argument('--eval_game_list', nargs='+', default=['StarGunner'])
     parser.add_argument('--num_eval_envs', type=int, default=16)
     parser.add_argument('--eval_freq', type=int, default=10)
     parser.add_argument("--eval", type=str2bool, default=False)
@@ -272,26 +304,34 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', '-wd', type=float, default=1e-4)
     parser.add_argument('--warmup_steps', type=int, default=10000)
     parser.add_argument('--grad_norm_clip', type=float, default=1.)
-    parser.add_argument('--num_workers', type=int, default=0)
+    parser.add_argument('--num_workers', type=int, default=10)
 
     # Dataset related
-    parser.add_argument('--data_steps', type=int, default=500000)
+    parser.add_argument('--data_steps', type=int, default=10000)
     parser.add_argument('--num_buffers', type=int, default=50)
     parser.add_argument('--game_name', type=str, default='Amidar')
-    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--trajectories_per_buffer', type=int, default=10,
                         help='Number of trajectories to sample from each of the buffers.')
-    parser.add_argument('--train_game_list', nargs='+', default=[])
+    parser.add_argument('--train_game_list', nargs='+', default=['StarGunner'])
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--num_datasets', type=int, default=1)
-    parser.add_argument('--folder_prefix', type=str, default=None)
+    parser.add_argument('--folder_prefix', type=str, default='/home/jikun')
 
     parser.add_argument("--save_freq", default=10, type=int)
     parser.add_argument('--experiment_name', default='atari', type=str)
     parser.add_argument('--cuda_cores', type=str, default=None)
     parser.add_argument('--wandb_status', type=str, default='online')
 
+    # Lora related
+    parser.add_argument('--rank', default=4, type=int)
+    parser.add_argument('--lora_dropout', default=0.0, type=float)
+    parser.add_argument('--lora_alpha', default=1., type=float)
+
     args = parser.parse_args()
     if args.cuda_cores is not None:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_cores
+
+    # main()
+    # wandb.agent(sweep_id, function=run, count=2)
     run(args)

@@ -160,3 +160,7 @@ cython_debug/
 #.idea/
 .vscode/
 *.txt
+*.pkl
+*.hdf5
+MDT_results/
+wandb/
