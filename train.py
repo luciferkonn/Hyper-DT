@@ -310,7 +310,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_steps', type=int, default=10000)
     parser.add_argument('--num_buffers', type=int, default=50)
     parser.add_argument('--game_name', type=str, default='Amidar')
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--trajectories_per_buffer', type=int, default=10,
                         help='Number of trajectories to sample from each of the buffers.')
     parser.add_argument('--train_game_list', nargs='+', default=['StarGunner'])

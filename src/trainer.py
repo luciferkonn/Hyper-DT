@@ -240,7 +240,8 @@ class Trainer:
             print(f"mean {np.mean(rew_sum)}, top3 {np.mean(top3)}")
             if self.use_wandb:
                 wandb.log({f"eval/step/{game_name}": t,
-                           f"eval/rew_mean/{game_name}": np.mean(rew_sum)})
+                           f"eval/rew_mean/{game_name}": np.mean(rew_sum),
+                           f"eval/rew_top3/{game_name}": np.mean(top3)})
         return np.mean(rew_sum)
 
 
