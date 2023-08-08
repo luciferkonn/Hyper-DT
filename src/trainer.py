@@ -142,8 +142,9 @@ class Trainer:
                           'returns-to-go': rtg,
                           'actions': actions,
                           'rewards': rewards}
+                current_episode = (iter_num)*self.num_steps_per_iter+t
                 with torch.set_grad_enabled(True):
-                    result_dict = self.model(inputs=inputs)
+                    result_dict = self.model(inputs=inputs, game_name=game_name, episode_num=current_episode)
                     train_loss = result_dict['loss']
                     # TODO: maybe add construction loss
                 self.optimizer.zero_grad(set_to_none=True)

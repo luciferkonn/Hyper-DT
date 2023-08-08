@@ -233,6 +233,8 @@ class GPT2(nn.Module):
         custom_causal_mask=None,
         is_training: bool = False,
         memory=None,
+        game_name=None,
+        episode_num=0
     ):
         if self.use_gw:
             # x size (64, 312, 512)
@@ -250,9 +252,11 @@ class GPT2(nn.Module):
         if mask is not None:
             x = x*mask[:, :, None]
             mask = mask[:, None, None, :]
-        for block in self.blocks:
+        for i, block in enumerate(self.blocks):
             if self.use_gw:
                 x, memory = block(x, mask, custom_causal_mask, memory)
+                memory_np = memory.cpu().detach().numpy()
+                np.savetxt(f"./memory/{game_name}/{episode_num}_{i}.txt", memory_np)
             else:
                 x = block(x, mask=mask, custom_causal_mask=custom_causal_mask)
         return x
@@ -363,6 +367,8 @@ class DecisionTransformer(nn.Module):
     def forward(
         self,
         inputs: Mapping[str, torch.Tensor],
+        game_name,
+        episode_num,
     ) -> Mapping[str, torch.Tensor]:
         num_batch = inputs['actions'].shape[0]
         num_steps = inputs['actions'].shape[1]
@@ -440,7 +446,7 @@ class DecisionTransformer(nn.Module):
         mask = mask.to(device=self.device)
         # Perception Module
         output_emb = self.transformer(
-            token_emb, mask=mask, custom_causal_mask=custom_causal_mask)
+            token_emb, mask=mask, custom_causal_mask=custom_causal_mask, game_name=game_name, episode_num=episode_num)
 
         # Output_embeddings are (B, 3T, D)
         # Next token predictions (tokens one before their actual place)
